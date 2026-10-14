@@ -135,6 +135,7 @@ class ShopWidget(QWidget):
         self.multiplier_mode = "1"
         self.assets_dir = Path(__file__).parent.parent / "assets"
         self.building_rows: dict[str, BuildingRowWidget] = {}
+        self.upgrade_buttons: dict[str, QPushButton] = {}
 
         self._setup_ui()
 
@@ -173,14 +174,32 @@ class ShopWidget(QWidget):
         upg_box.setStyleSheet("background: rgba(15, 23, 42, 0.6); border-radius: 8px; border: 1px solid #1e293b;")
         upg_vbox = QVBoxLayout(upg_box)
         upg_vbox.setContentsMargins(10, 8, 10, 8)
-        upg_title = QLabel("FORSCHUNG & UPGRADES")
+        upg_vbox.setSpacing(6)
+
+        upg_title = QLabel("FORSCHUNG & UPGRADES (⚡ Klick-Skills  •  ★ Flotten-Boni)")
         upg_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         upg_title.setStyleSheet("color: #94a3b8; font-size: 10px; letter-spacing: 0.5px;")
         upg_vbox.addWidget(upg_title)
 
-        self.upgrades_layout = QHBoxLayout()
+        upg_scroll = QScrollArea()
+        upg_scroll.setWidgetResizable(True)
+        upg_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        upg_scroll.setFixedHeight(76)
+        upg_scroll.setStyleSheet("background: transparent;")
+        upg_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        upg_container = QWidget()
+        self.upgrades_layout = QHBoxLayout(upg_container)
+        self.upgrades_layout.setContentsMargins(0, 0, 0, 0)
         self.upgrades_layout.setSpacing(8)
-        upg_vbox.addLayout(self.upgrades_layout)
+
+        self.no_upg_lbl = QLabel("Keine weiteren Forschungen verfügbar")
+        self.no_upg_lbl.setStyleSheet("color: #64748b; font-size: 11px; font-style: italic;")
+        self.upgrades_layout.addWidget(self.no_upg_lbl)
+        self.upgrades_layout.addStretch()
+
+        upg_scroll.setWidget(upg_container)
+        upg_vbox.addWidget(upg_scroll)
         main_layout.addWidget(upg_box)
 
         # Buildings scroll area
@@ -223,43 +242,68 @@ class ShopWidget(QWidget):
                 self.buildings_layout.insertWidget(self.buildings_layout.count() - 1, row)
             self.building_rows[b_id].update_view(state, self.multiplier_mode, self.assets_dir)
 
-        # 2. Update upgrade buttons in shelf
-        # Clear existing upgrade buttons
-        while self.upgrades_layout.count() > 0:
-            item = self.upgrades_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        # Find available unpurchased upgrades that are unlocked
-        available_upgrades = [
-            u
-            for u in state.upgrades.values()
+        # 2. Update persistent upgrade buttons in shelf
+        available_upgrades = {
+            u_id: u
+            for u_id, u in state.upgrades.items()
             if not u.purchased and state.lifetime_dust >= u.unlock_threshold
-        ]
+        }
 
-        if not available_upgrades:
-            no_upg_lbl = QLabel("Keine weiteren Upgrades verfügbar")
-            no_upg_lbl.setStyleSheet("color: #64748b; font-size: 11px; font-style: italic;")
-            self.upgrades_layout.addWidget(no_upg_lbl)
-        else:
-            for upg in available_upgrades[:6]:  # Show top 6 available
-                can_afford = state.dust >= upg.cost
+        # Remove buttons for upgrades that were bought or are no longer available
+        for u_id in list(self.upgrade_buttons.keys()):
+            if u_id not in available_upgrades:
+                btn = self.upgrade_buttons.pop(u_id)
+                self.upgrades_layout.removeWidget(btn)
+                btn.deleteLater()
+
+        # Update or create buttons for currently available upgrades
+        for u_id, upg in available_upgrades.items():
+            if u_id not in self.upgrade_buttons:
                 btn = QPushButton()
-                btn.setFixedSize(54, 54)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor if can_afford else Qt.CursorShape.ForbiddenCursor)
-                btn.setToolTip(f"<b>{upg.name}</b><br>{upg.description}<br><br><b>Kosten: {format_number(upg.cost)} ✦</b>")
-                btn.setText("★\n" + format_number(upg.cost))
-                if can_afford:
+                btn.setFixedSize(68, 62)
+                # Connect click handler ONCE
+                btn.clicked.connect(lambda _, uid=u_id: self.upgrade_bought.emit(uid))
+                # Insert before stretch
+                self.upgrades_layout.insertWidget(self.upgrades_layout.count() - 1, btn)
+                self.upgrade_buttons[u_id] = btn
+            else:
+                btn = self.upgrade_buttons[u_id]
+
+            can_afford = state.dust >= upg.cost
+            btn.setEnabled(can_afford)
+            btn.setCursor(
+                Qt.CursorShape.PointingHandCursor if can_afford else Qt.CursorShape.ForbiddenCursor
+            )
+
+            is_click_skill = upg.target_type in ("click", "click_flat", "click_ops_percent")
+            symbol = "⚡" if is_click_skill else "★"
+            type_tag = "[KLICK-SKILL]" if is_click_skill else "[FLOTTEN-BONUS]"
+            cost_str = format_number(upg.cost)
+
+            btn.setText(f"{symbol}\n{cost_str} ✦")
+            type_color = "#38bdf8" if is_click_skill else "#c084fc"
+            btn.setToolTip(
+                f"<b>{upg.name}</b> <span style='color: {type_color}; font-weight: bold;'>{type_tag}</span>"
+                f"<br>{upg.description}<br><br><b>Kosten: {cost_str} ✦</b>"
+            )
+
+            if can_afford:
+                if is_click_skill:
                     btn.setStyleSheet(
-                        "QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7928ca, stop:1 #4338ca); "
-                        "color: #ffffff; border-radius: 8px; border: 1px solid #c084fc; font-size: 9px; font-weight: bold; } "
-                        "QPushButton:hover { border: 2px solid #f43f5e; }"
+                        "QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0284c7, stop:1 #0369a1); "
+                        "color: #ffffff; border-radius: 8px; border: 1.5px solid #38bdf8; font-size: 10px; font-weight: bold; } "
+                        "QPushButton:hover { background: #0ea5e9; border: 2px solid #ffffff; }"
                     )
                 else:
                     btn.setStyleSheet(
-                        "QPushButton { background: rgba(255, 255, 255, 0.05); color: #64748b; "
-                        "border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); font-size: 9px; }"
+                        "QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7928ca, stop:1 #4338ca); "
+                        "color: #ffffff; border-radius: 8px; border: 1.5px solid #c084fc; font-size: 10px; font-weight: bold; } "
+                        "QPushButton:hover { background: #8b5cf6; border: 2px solid #ffffff; }"
                     )
-                btn.clicked.connect(lambda _, u_id=upg.id: self.upgrade_bought.emit(u_id))
-                self.upgrades_layout.addWidget(btn)
-        self.upgrades_layout.addStretch()
+            else:
+                btn.setStyleSheet(
+                    "QPushButton { background: rgba(255, 255, 255, 0.04); color: #64748b; "
+                    "border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); font-size: 10px; }"
+                )
+
+        self.no_upg_lbl.setVisible(len(available_upgrades) == 0)

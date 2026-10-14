@@ -40,7 +40,10 @@ class AsteroidWidget(QWidget):
         # Visual assets
         assets_dir = Path(__file__).parent.parent / "assets"
         self.asteroid_pixmap = QPixmap(str(assets_dir / "asteroid.jpg"))
-        self.comet_pixmap = QPixmap(str(assets_dir / "comet.jpg"))
+        comet_path = assets_dir / "comet.png"
+        if not comet_path.exists():
+            comet_path = assets_dir / "comet.jpg"
+        self.comet_pixmap = QPixmap(str(comet_path))
 
         # Animation states
         self.scale_factor = 1.0
@@ -214,3 +217,14 @@ class AsteroidWidget(QWidget):
             # Draw text centered on position
             painter.drawText(int(ft.x - 60), int(ft.y), 120, 30, Qt.AlignmentFlag.AlignCenter, ft.text)
             painter.restore()
+
+        # 6. Click power indicator at bottom
+        from src.utils import format_number
+
+        click_val = self.engine.state.click_power()
+        painter.save()
+        painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        painter.setPen(QColor(56, 189, 248, 200))
+        hint_text = f"✦ Klickkraft: +{format_number(click_val)} pro Klick"
+        painter.drawText(0, int(h - 36), int(w), 30, Qt.AlignmentFlag.AlignCenter, hint_text)
+        painter.restore()

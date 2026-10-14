@@ -55,17 +55,28 @@ class HUDWidget(QFrame):
         curr_box.addWidget(self.crystal_icon)
 
         text_vbox = QVBoxLayout()
-        text_vbox.setSpacing(1)
+        text_vbox.setSpacing(2)
 
         self.dust_label = QLabel("0 Sternenstaub")
         self.dust_label.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         self.dust_label.setStyleSheet("color: #00f0ff; letter-spacing: 0.5px;")
         text_vbox.addWidget(self.dust_label)
 
+        rates_hbox = QHBoxLayout()
+        rates_hbox.setSpacing(14)
+
         self.ops_label = QLabel("pro Sekunde: +0,0")
         self.ops_label.setFont(QFont("Segoe UI", 10))
         self.ops_label.setStyleSheet("color: #94a3b8;")
-        text_vbox.addWidget(self.ops_label)
+        rates_hbox.addWidget(self.ops_label)
+
+        self.click_label = QLabel("pro Klick: +1,0")
+        self.click_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.click_label.setStyleSheet("color: #38bdf8;")
+        rates_hbox.addWidget(self.click_label)
+
+        rates_hbox.addStretch()
+        text_vbox.addLayout(rates_hbox)
 
         curr_box.addLayout(text_vbox)
         layout.addLayout(curr_box)
@@ -112,6 +123,9 @@ class HUDWidget(QFrame):
         self.dust_label.setText(f"{format_number(state.dust)} Sternenstaub")
         effective_ops = state.total_ops() * (frenzy_multiplier if frenzy_remaining > 0 else 1.0)
         self.ops_label.setText(f"pro Sekunde: +{format_number(effective_ops)}")
+
+        effective_click = state.click_power() * (frenzy_multiplier if frenzy_remaining > 0 else 1.0)
+        self.click_label.setText(f"pro Klick: +{format_number(effective_click)}")
 
         if frenzy_remaining > 0:
             self.frenzy_label.setVisible(True)

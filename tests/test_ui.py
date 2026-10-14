@@ -71,3 +71,31 @@ def test_settings_dialog(qapp):
     dlg = SettingsDialog(state, save_manager, sound_enabled=True)
     assert dlg.tabs.count() == 2
     dlg.close()
+
+
+def test_shop_upgrade_button_reactivity(qapp):
+    from src.widgets.shop_widget import ShopWidget
+
+    state = create_default_game_state()
+    state.dust = 100.0
+    state.lifetime_dust = 100.0
+
+    shop = ShopWidget()
+    shop.update_view(state)
+
+    # Check that upgrade buttons were created
+    assert len(shop.upgrade_buttons) > 0
+    first_upg_id = next(iter(shop.upgrade_buttons.keys()))
+    initial_btn = shop.upgrade_buttons[first_upg_id]
+
+    # Re-run update_view (simulating 100ms game loop tick)
+    shop.update_view(state)
+
+    # Button must be persistent across ticks, NOT deleted and recreated
+    assert shop.upgrade_buttons[first_upg_id] is initial_btn
+
+    # Test click on upgrade button
+    bought_ids = []
+    shop.upgrade_bought.connect(lambda uid: bought_ids.append(uid))
+    initial_btn.click()
+    assert first_upg_id in bought_ids

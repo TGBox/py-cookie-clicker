@@ -68,6 +68,35 @@ def test_game_state_click_and_upgrades():
     state.upgrades["iron_pick"] = click_upg
     assert state.click_power() == 2.0
 
+    # Add flat click bonus
+    flat_upg = Upgrade(
+        id="gloves",
+        name="Plasma-Handschuhe",
+        description="+5 pro Klick",
+        cost=20.0,
+        target_type="click_flat",
+        multiplier=5.0,
+        purchased=True,
+    )
+    state.upgrades["gloves"] = flat_upg
+    # Base 1 + 5 = 6, times 2 = 12
+    assert state.click_power() == 12.0
+
+    # Add % of OpS to click
+    state.buildings["drone"].count = 100  # 50 OpS
+    ops_percent_upg = Upgrade(
+        id="resonance",
+        name="Kinetische Resonanz",
+        description="+2% des OpS zu jedem Klick",
+        cost=50.0,
+        target_type="click_ops_percent",
+        multiplier=0.02,
+        purchased=True,
+    )
+    state.upgrades["resonance"] = ops_percent_upg
+    # 50 OpS * 0.02 = 1.0. Total before mult: 6 + 1 = 7. Multiplied by 2 = 14.
+    assert state.click_power() == 14.0
+
 
 def test_game_state_building_ops():
     state = create_default_game_state()
